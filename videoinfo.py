@@ -24,6 +24,7 @@ Pythonista 需要先安装 requests 和 openpyxl。可在 StaSh 中执行:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import shutil
 import sys
 import time
@@ -53,6 +54,25 @@ PYTHONISTA_CREATE_BACKUP = True
 def is_pythonista() -> bool:
     """判断当前脚本是否运行在 Pythonista 环境。"""
     return sys.platform == "ios"
+
+
+@dataclass
+class Options:
+    """脚本运行参数。"""
+
+    excel: Path
+    sheet: str | None = None
+    start_row: int = 2
+    separator: str = "; "
+    cookie: str = ""
+    timeout: float = 10.0
+    sleep: float = 0.3
+    no_backup: bool = False
+
+
+def is_pythonista() -> bool:
+    """判断当前脚本是否运行在 Pythonista 环境。"""
+    return sys.platform == "ios" and importlib.util.find_spec("dialogs") is not None
 
 
 @dataclass
