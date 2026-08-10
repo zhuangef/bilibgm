@@ -10,9 +10,9 @@ B 站 TAG 接口。TAG 名称会写入原工作簿的 R 列,music_id 会写入 S
     python videoinfo.py videos.xlsx --sheet Sheet1 --start-row 2
 
 Pythonista 用法:
-    1. 在 Pythonista 中运行本脚本。
-    2. 按提示选择 .xlsx 文件并填写可选参数。
-    3. 脚本会在保存前自动创建 .bak.xlsx 备份,除非关闭备份选项。
+    1. 把本脚本和 video_list.xlsx 放在同一个目录。
+    2. 如需登录态,把 Cookie 填到下方 PYTHONISTA_COOKIE 常量。
+    3. 在 Pythonista 中直接运行本脚本,脚本会自动处理同目录的 video_list.xlsx。
 
 依赖:
     pip install openpyxl requests
@@ -39,6 +39,35 @@ TAG_URL = "https://api.bilibili.com/x/web-interface/view/detail/tag"
 BVID_COLUMN = "A"
 TAG_NAME_COLUMN = "R"
 MUSIC_ID_COLUMN = "S"
+
+PYTHONISTA_EXCEL_FILENAME = "video_list.xlsx"
+# 在 Pythonista 中运行时,请把 Cookie 写在这里,例如:
+# PYTHONISTA_COOKIE = "SESSDATA=xxx; bili_jct=xxx"
+PYTHONISTA_COOKIE = ""
+PYTHONISTA_START_ROW = 2
+PYTHONISTA_SEPARATOR = "; "
+PYTHONISTA_TIMEOUT = 10.0
+PYTHONISTA_SLEEP = 0.3
+PYTHONISTA_CREATE_BACKUP = True
+
+
+def is_pythonista() -> bool:
+    """判断当前脚本是否运行在 Pythonista 环境。"""
+    return sys.platform == "ios"
+
+
+@dataclass
+class Options:
+    """脚本运行参数。"""
+
+    excel: Path
+    sheet: str | None = None
+    start_row: int = 2
+    separator: str = "; "
+    cookie: str = ""
+    timeout: float = 10.0
+    sleep: float = 0.3
+    no_backup: bool = False
 
 
 def is_pythonista() -> bool:
@@ -88,45 +117,24 @@ def parse_args() -> Options:
     return Options(**vars(namespace))
 
 
-def input_alert(title: str, message: str, default: str = "") -> str:
-    """使用 Pythonista 弹窗读取文本。"""
-    console = __import__("console")
-    return console.input_alert(title, message, default, "确定", hide_cancel_button=False)
-
-
-def ask_bool(title: str, message: str, default: bool) -> bool:
-    """使用 Pythonista 弹窗读取布尔值。"""
-    console = __import__("console")
-    first = "是" if default else "否"
-    second = "否" if default else "是"
-    choice = console.alert(title, message, first, second, hide_cancel_button=True)
-    return default if choice == 1 else not default
+def get_script_dir() -> Path:
+    """返回脚本所在目录,兼容没有 __file__ 的运行方式。"""
+    script = globals().get("__file__")
+    if script:
+        return Path(script).resolve().parent
+    return Path.cwd()
 
 
 def parse_pythonista_options() -> Options:
-    """在 Pythonista 中通过系统文件选择器和弹窗收集参数。"""
-    dialogs = __import__("dialogs")
-    picked_file = dialogs.pick_document(types=["public.data", "org.openxmlformats.spreadsheetml.sheet"])
-    if not picked_file:
-        raise SystemExit("已取消选择文件。")
-
-    sheet = input_alert("工作表名称", "留空则使用当前活动工作表。", "").strip() or None
-    start_row_text = input_alert("起始行", "第一行数据所在行号。", "2").strip() or "2"
-    separator = input_alert("分隔符", "多个 TAG/music_id 的分隔符。", "; ")
-    cookie = input_alert("Cookie", "可选,例如 SESSDATA=xxx；不需要可留空。", "")
-    timeout_text = input_alert("超时秒数", "HTTP 请求超时时间。", "10").strip() or "10"
-    sleep_text = input_alert("请求间隔", "每个视频之间等待的秒数。", "0.3").strip() or "0.3"
-    create_backup = ask_bool("创建备份", "保存前是否创建 .bak.xlsx 备份？", True)
-
+    """在 Pythonista 中使用脚本同目录的 video_list.xlsx 和代码内 Cookie。"""
     return Options(
-        excel=Path(picked_file),
-        sheet=sheet,
-        start_row=int(start_row_text),
-        separator=separator,
-        cookie=cookie.strip(),
-        timeout=float(timeout_text),
-        sleep=float(sleep_text),
-        no_backup=not create_backup,
+        excel=get_script_dir() / PYTHONISTA_EXCEL_FILENAME,
+        start_row=PYTHONISTA_START_ROW,
+        separator=PYTHONISTA_SEPARATOR,
+        cookie=PYTHONISTA_COOKIE.strip(),
+        timeout=PYTHONISTA_TIMEOUT,
+        sleep=PYTHONISTA_SLEEP,
+        no_backup=not PYTHONISTA_CREATE_BACKUP,
     )
 
 
