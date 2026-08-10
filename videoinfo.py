@@ -102,7 +102,7 @@ class Options:
 
 def is_pythonista() -> bool:
     """判断当前脚本是否运行在 Pythonista 环境。"""
-    return sys.platform == "ios" and importlib.util.find_spec("dialogs") is not None
+    return sys.platform == "ios"
 
 
 @dataclass
