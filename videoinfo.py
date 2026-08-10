@@ -70,6 +70,54 @@ class Options:
     sleep: float = 0.3
     no_backup: bool = False
 
+PYTHONISTA_EXCEL_FILENAME = "video_list.xlsx"
+# 在 Pythonista 中运行时,请把 Cookie 写在这里,例如:
+# PYTHONISTA_COOKIE = "SESSDATA=xxx; bili_jct=xxx"
+PYTHONISTA_COOKIE = ""
+PYTHONISTA_START_ROW = 2
+PYTHONISTA_SEPARATOR = "; "
+PYTHONISTA_TIMEOUT = 10.0
+PYTHONISTA_SLEEP = 0.3
+PYTHONISTA_CREATE_BACKUP = True
+
+
+def is_pythonista() -> bool:
+    """判断当前脚本是否运行在 Pythonista 环境。"""
+    return sys.platform == "ios"
+
+
+@dataclass
+class Options:
+    """脚本运行参数。"""
+
+    excel: Path
+    sheet: str | None = None
+    start_row: int = 2
+    separator: str = "; "
+    cookie: str = ""
+    timeout: float = 10.0
+    sleep: float = 0.3
+    no_backup: bool = False
+
+
+def is_pythonista() -> bool:
+    """判断当前脚本是否运行在 Pythonista 环境。"""
+    return sys.platform == "ios" and importlib.util.find_spec("dialogs") is not None
+
+
+@dataclass
+class Options:
+    """脚本运行参数。"""
+
+    excel: Path
+    sheet: str | None = None
+    start_row: int = 2
+    separator: str = "; "
+    cookie: str = ""
+    timeout: float = 10.0
+    sleep: float = 0.3
+    no_backup: bool = False
+
 
 class BilibiliAPIError(RuntimeError):
     """B 站接口返回错误时抛出。"""
@@ -119,6 +167,11 @@ def parse_pythonista_options() -> Options:
         no_backup=not PYTHONISTA_CREATE_BACKUP,
     )
 
+def get_options() -> Options:
+    """根据运行环境选择命令行参数或 Pythonista 交互式参数。"""
+    if is_pythonista() and len(sys.argv) == 1:
+        return parse_pythonista_options()
+    return parse_args()
 
 def get_options() -> Options:
     """根据运行环境选择命令行参数或 Pythonista 交互式参数。"""
