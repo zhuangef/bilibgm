@@ -24,7 +24,7 @@ Pythonista 需要先安装 requests 和 openpyxl。可在 StaSh 中执行:
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import re
 import shutil
 import sys
 import time
@@ -39,6 +39,36 @@ TAG_URL = "https://api.bilibili.com/x/web-interface/view/detail/tag"
 BVID_COLUMN = "A"
 TAG_NAME_COLUMN = "R"
 MUSIC_ID_COLUMN = "S"
+BOOK_TITLE_PATTERN = re.compile(r"《([^》]+)》")
+
+PYTHONISTA_EXCEL_FILENAME = "video_list.xlsx"
+# 在 Pythonista 中运行时,请把 Cookie 写在这里,例如:
+# PYTHONISTA_COOKIE = "SESSDATA=xxx; bili_jct=xxx"
+PYTHONISTA_COOKIE = ""
+PYTHONISTA_START_ROW = 2
+PYTHONISTA_SEPARATOR = "; "
+PYTHONISTA_TIMEOUT = 10.0
+PYTHONISTA_SLEEP = 0.3
+PYTHONISTA_CREATE_BACKUP = True
+
+
+def is_pythonista() -> bool:
+    """判断当前脚本是否运行在 Pythonista 环境。"""
+    return sys.platform == "ios"
+
+
+@dataclass
+class Options:
+    """脚本运行参数。"""
+
+    excel: Path
+    sheet: str | None = None
+    start_row: int = 2
+    separator: str = "; "
+    cookie: str = ""
+    timeout: float = 10.0
+    sleep: float = 0.3
+    no_backup: bool = False
 
 PYTHONISTA_EXCEL_FILENAME = "video_list.xlsx"
 # 在 Pythonista 中运行时,请把 Cookie 写在这里,例如:
@@ -137,6 +167,11 @@ def parse_pythonista_options() -> Options:
         no_backup=not PYTHONISTA_CREATE_BACKUP,
     )
 
+def get_options() -> Options:
+    """根据运行环境选择命令行参数或 Pythonista 交互式参数。"""
+    if is_pythonista() and len(sys.argv) == 1:
+        return parse_pythonista_options()
+    return parse_args()
 
 def get_options() -> Options:
     """根据运行环境选择命令行参数或 Pythonista 交互式参数。"""
@@ -168,6 +203,19 @@ def get_tags(session: Any, bvid: str, cid: int, timeout: float) -> list[dict[str
     if not isinstance(data, list):
         raise BilibiliAPIError(f"TAG 接口返回格式异常: {bvid}: data 不是列表")
     return data
+
+
+def extract_bgm_tag_name(tag_name: str) -> str:
+    """只保留 BGM TAG 名称中《》内的内容。"""
+    match = BOOK_TITLE_PATTERN.search(tag_name)
+    if not match:
+        return ""
+    return match.group(1).strip()
+
+
+def get_bgm_tags(tags: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """筛选 tag_type 为 bgm 的 TAG。"""
+    return [tag for tag in tags if tag.get("tag_type") == "bgm"]
 
 
 def make_session(cookie: str) -> Any:
@@ -215,12 +263,19 @@ def run(options: Options) -> int:
         try:
             cid = get_first_cid(session, bvid, options.timeout)
             tags = get_tags(session, bvid, cid, options.timeout)
-            tag_names = [str(tag.get("tag_name", "")).strip() for tag in tags if tag.get("tag_name")]
-            music_ids = [str(tag.get("music_id", "")).strip() for tag in tags if tag.get("music_id")]
+            bgm_tags = get_bgm_tags(tags)
+            tag_names = [
+                name
+                for tag in bgm_tags
+                if tag.get("tag_name")
+                for name in [extract_bgm_tag_name(str(tag["tag_name"]))]
+                if name
+            ]
+            music_ids = [str(tag.get("music_id", "")).strip() for tag in bgm_tags if tag.get("music_id")]
             worksheet[f"{TAG_NAME_COLUMN}{row}"] = options.separator.join(tag_names)
             worksheet[f"{MUSIC_ID_COLUMN}{row}"] = options.separator.join(music_ids)
             processed += 1
-            print(f"row {row}: {bvid} -> {len(tag_names)} 个 TAG, {len(music_ids)} 个 music_id")
+            print(f"row {row}: {bvid} -> {len(tag_names)} 个 BGM TAG, {len(music_ids)} 个 music_id")
         except Exception as exc:  # noqa: BLE001 - 单行失败后继续批量处理。
             failed.append((row, bvid, str(exc)))
             print(f"row {row}: {bvid} 失败: {exc}", file=sys.stderr)
